@@ -54,7 +54,7 @@ Pastikan Flutter SDK dan Android SDK telah terpasang.
 1. Clone repository:
 
 ```bash
-git clone URL_REPOSITORY
+git clone https://github.com/adeliaanovi/app_mydaily.git
 ```
 
 2. Masuk ke folder project:

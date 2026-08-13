@@ -10,6 +10,7 @@ import 'screens/history_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/statistics_screen.dart';
 import 'services/storage_service.dart';
+import 'widgets/responsive_app_frame.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -77,6 +78,12 @@ class MyDailyApp extends StatelessWidget {
         '/add': (_) => const AddActivityScreen(),
       },
       home: const MainNavigationScreen(),
+      // `builder` membungkus SELURUH app (semua screen + bottom nav bar +
+      // route yang di-push seperti AddActivityScreen) satu kali saja di
+      // sini, jadi tidak perlu mengubah setiap file screen satu-satu.
+      builder: (context, child) {
+        return ResponsiveAppFrame(child: child!);
+      },
     );
   }
 }

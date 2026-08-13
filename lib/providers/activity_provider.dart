@@ -6,86 +6,114 @@ import '../services/storage_service.dart';
 class ActivityProvider extends ChangeNotifier {
   final StorageService storageService;
 
-  ActivityProvider(this.storageService) {
-    loadActivities();
-  }
+  ActivityProvider(this.storageService);
 
   List<ActivityModel> _activities = [];
   bool _isLoading = true;
 
-  List<ActivityModel> get activities => _activities;
-
+  List<ActivityModel> get activities => List.unmodifiable(_activities);
   bool get isLoading => _isLoading;
 
-  // Mengambil seluruh aktivitas dari penyimpanan
   Future<void> loadActivities() async {
     _isLoading = true;
     notifyListeners();
 
-    _activities = await storageService.getActivities();
+    try {
+      _activities = await storageService.getActivities();
+      _sortActivities();
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
 
-    // Aktivitas terbaru ditampilkan terlebih dahulu
-    _activities.sort(
-      (a, b) => b.time.compareTo(a.time),
-    );
-
-    _isLoading = false;
+  Future<void> addActivity(ActivityModel activity) async {
+    await storageService.addActivity(activity);
+    _activities = [..._activities, activity];
+    _sortActivities();
     notifyListeners();
   }
 
-  // CREATE
-  Future<void> addActivity(ActivityModel activity) async {
-    await storageService.addActivity(activity);
-    await loadActivities();
-  }
-
-  // DELETE
   Future<void> deleteActivity(String id) async {
     await storageService.deleteActivity(id);
-    await loadActivities();
+    _activities = _activities.where((item) => item.id != id).toList();
+    notifyListeners();
   }
 
-  // UPDATE
-  Future<void> updateActivity(
-    ActivityModel activity,
-  ) async {
+  Future<void> updateActivity(ActivityModel activity) async {
     await storageService.updateActivity(activity);
-    await loadActivities();
+    final index = _activities.indexWhere((item) => item.id == activity.id);
+    if (index != -1) {
+      _activities[index] = activity;
+      _sortActivities();
+      notifyListeners();
+    }
   }
 
-  // Aktivitas hari ini
   List<ActivityModel> get todayActivities {
-    final now = DateTime.now();
-
-    return _activities.where((activity) {
-      return activity.date.year == now.year &&
-          activity.date.month == now.month &&
-          activity.date.day == now.day;
-    }).toList();
+    return activitiesForDate(DateTime.now());
   }
 
-  // Aktivitas minggu ini
+  List<ActivityModel> activitiesForDate(DateTime date) {
+    final target = DateTime(date.year, date.month, date.day);
+    final result = _activities.where((activity) {
+      final value = DateTime(
+        activity.date.year,
+        activity.date.month,
+        activity.date.day,
+      );
+      return value == target;
+    }).toList();
+
+    result.sort((a, b) => a.time.compareTo(b.time));
+    return result;
+  }
+
   List<ActivityModel> get thisWeekActivities {
-    final now = DateTime.now();
-
-    final today = DateTime(
-      now.year,
-      now.month,
-      now.day,
-    );
-
-    // Senin sebagai hari pertama dalam satu minggu
-    final startOfWeek = today.subtract(
-      Duration(days: today.weekday - 1),
-    );
-
-    final endOfWeek = startOfWeek.add(
-      const Duration(days: 7),
-    );
+    final today = _dateOnly(DateTime.now());
+    final start = today.subtract(Duration(days: today.weekday - 1));
+    final end = start.add(const Duration(days: 7));
 
     return _activities.where((activity) {
-      return !activity.date.isBefore(startOfWeek) &&
-          activity.date.isBefore(endOfWeek);
+      final date = _dateOnly(activity.date);
+      return !date.isBefore(start) && date.isBefore(end);
     }).toList();
   }
+
+  ActivityModel? dominantActivity(List<ActivityModel> source) {
+    if (source.isEmpty) return null;
+
+    final counts = <String, int>{};
+    for (final activity in source) {
+      counts[activity.mood] = (counts[activity.mood] ?? 0) + 1;
+    }
+
+    final mood = counts.entries.reduce(
+      (a, b) => a.value >= b.value ? a : b,
+    );
+
+    return source.firstWhere(
+      (activity) => activity.mood == mood.key,
+    );
+  }
+
+  String dominantMood(List<ActivityModel> source) {
+    if (source.isEmpty) return '😊';
+
+    final counts = <String, int>{};
+    for (final activity in source) {
+      counts[activity.mood] = (counts[activity.mood] ?? 0) + 1;
+    }
+
+    return counts.entries
+        .reduce((a, b) => a.value >= b.value ? a : b)
+        .key;
+  }
+
+  void _sortActivities() {
+    _activities.sort((a, b) => b.time.compareTo(a.time));
+  }
+
+  DateTime _dateOnly(DateTime value) =>
+      DateTime(value.year, value.month, value.day);
 }
